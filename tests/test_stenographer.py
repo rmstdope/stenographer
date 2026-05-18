@@ -139,6 +139,29 @@ class StenographerTests(unittest.TestCase):
         self.assertEqual(exit_code, 1)
         self.assertIn("Error: cannot write", stderr.getvalue())
 
+    def test_validate_audio_path_accepts_mp4(self) -> None:
+        with tempfile.NamedTemporaryFile(suffix=".mp4") as tmp:
+            path = stenographer._validate_audio_path(tmp.name)
+            self.assertEqual(path.suffix.lower(), ".mp4")
+
+    def test_transcribe_audio_accepts_mp4(self) -> None:
+        with tempfile.NamedTemporaryFile(suffix=".mp4") as tmp:
+            fake_model = MagicMock()
+            fake_model.transcribe.return_value = (
+                [types.SimpleNamespace(text="Hello Teams")],
+                types.SimpleNamespace(language="en", duration=5.0),
+            )
+            fake_whisper_module = types.SimpleNamespace(
+                WhisperModel=MagicMock(return_value=fake_model)
+            )
+
+            with patch.dict(sys.modules, {"faster_whisper": fake_whisper_module}):
+                with patch("stenographer.load_audio", return_value="AUDIO"):
+                    result = stenographer.transcribe_audio(tmp.name)
+
+        self.assertEqual(result["text"], "Hello Teams")
+        self.assertEqual(result["language"], "en")
+
 
 if __name__ == "__main__":
     unittest.main()
