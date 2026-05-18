@@ -81,11 +81,12 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("audio", help="Path to input audio file (.wav or .mp3)")
     parser.add_argument("-o", "--output", help="Optional path to write transcript text")
     parser.add_argument("--model", default="KBLab/kb-whisper-small", help="Whisper model name")
-    parser.add_argument("--language", default=None, help="Language code (e.g. sv, en)")
+    parser.add_argument("--language", help="Language code (e.g. sv, en)")
     parser.add_argument("--beam-size", type=int, default=5, help="Beam size for decoding")
     parser.add_argument(
         "--compute-type",
         default="auto",
+        choices=["auto", "int8", "float16", "float32"],
         help="Compute type for faster-whisper (auto, int8, float16, float32)",
     )
     args = parser.parse_args(argv)
