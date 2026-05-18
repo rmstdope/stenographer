@@ -350,6 +350,114 @@ class StenographerTests(unittest.TestCase):
         self.assertEqual(exit_code, 0)
         self.assertEqual(stdout.getvalue(), "hello\n")
 
+    # --- _format_timestamp ---
+
+    def test_format_timestamp_seconds_only(self) -> None:
+        self.assertEqual(stenographer._format_timestamp(5.9), "00:00:05")
+
+    def test_format_timestamp_minutes_and_seconds(self) -> None:
+        self.assertEqual(stenographer._format_timestamp(75.0), "00:01:15")
+
+    def test_format_timestamp_hours(self) -> None:
+        self.assertEqual(stenographer._format_timestamp(3665.0), "01:01:05")
+
+    # --- _format_segments ---
+
+    def test_format_segments_single_segment(self) -> None:
+        segments = [{"start": 4.0, "end": 9.0, "text": " Hej världen"}]
+        result = stenographer._format_segments(segments)
+        self.assertEqual(result, "[00:00:04 --> 00:00:09] Hej världen")
+
+    def test_format_segments_omits_empty_text(self) -> None:
+        segments = [
+            {"start": 0.0, "end": 2.0, "text": "   "},
+            {"start": 2.0, "end": 5.0, "text": "Hello"},
+        ]
+        result = stenographer._format_segments(segments)
+        self.assertEqual(result, "[00:00:02 --> 00:00:05] Hello")
+
+    def test_format_segments_multiple_segments(self) -> None:
+        segments = [
+            {"start": 0.0, "end": 4.0, "text": " First."},
+            {"start": 4.0, "end": 9.0, "text": " Second."},
+        ]
+        result = stenographer._format_segments(segments)
+        self.assertEqual(
+            result,
+            "[00:00:00 --> 00:00:04] First.\n[00:00:04 --> 00:00:09] Second.",
+        )
+
+    def test_format_segments_returns_empty_string_for_no_segments(self) -> None:
+        self.assertEqual(stenographer._format_segments([]), "")
+
+    # --- transcribe_audio returns segments ---
+
+    def test_transcribe_audio_result_includes_segments(self) -> None:
+        seg = {"start": 0.0, "end": 3.0, "text": " Hej"}
+        fake_mlx = types.SimpleNamespace(
+            transcribe=MagicMock(
+                return_value={
+                    "text": " Hej",
+                    "segments": [seg],
+                    "language": "sv",
+                }
+            )
+        )
+        with tempfile.NamedTemporaryFile(suffix=".wav") as tmp:
+            with patch.dict(sys.modules, {"mlx_whisper": fake_mlx}):
+                with patch("stenographer._ensure_mlx_model", return_value="/fake/model"):
+                    result = stenographer.transcribe_audio(tmp.name)
+
+        self.assertIn("segments", result)
+        self.assertEqual(len(result["segments"]), 1)
+        self.assertEqual(result["segments"][0]["start"], 0.0)
+        self.assertEqual(result["segments"][0]["end"], 3.0)
+
+    # --- main() formatted output ---
+
+    def test_main_prints_formatted_segments_by_default(self) -> None:
+        segments = [{"start": 0.0, "end": 4.0, "text": " Hej världen"}]
+        with tempfile.NamedTemporaryFile(suffix=".wav") as wav:
+            with patch(
+                "stenographer.transcribe_audio",
+                return_value={"text": "Hej världen", "segments": segments},
+            ):
+                with patch("sys.stdout", new=io.StringIO()) as stdout:
+                    exit_code = stenographer.main([wav.name])
+
+        self.assertEqual(exit_code, 0)
+        self.assertEqual(stdout.getvalue(), "[00:00:00 --> 00:00:04] Hej världen\n")
+
+    def test_main_prints_flat_text_with_format_text_flag(self) -> None:
+        segments = [{"start": 0.0, "end": 4.0, "text": " Hej världen"}]
+        with tempfile.NamedTemporaryFile(suffix=".wav") as wav:
+            with patch(
+                "stenographer.transcribe_audio",
+                return_value={"text": "Hej världen", "segments": segments},
+            ):
+                with patch("sys.stdout", new=io.StringIO()) as stdout:
+                    exit_code = stenographer.main([wav.name, "--format", "text"])
+
+        self.assertEqual(exit_code, 0)
+        self.assertEqual(stdout.getvalue(), "Hej världen\n")
+
+    def test_main_writes_formatted_segments_to_file_by_default(self) -> None:
+        segments = [{"start": 0.0, "end": 4.0, "text": " Hej"}]
+        with (
+            tempfile.NamedTemporaryFile(suffix=".wav") as wav,
+            tempfile.TemporaryDirectory() as tmpdir,
+        ):
+            output_file = Path(tmpdir) / "out.txt"
+            with patch(
+                "stenographer.transcribe_audio",
+                return_value={"text": "Hej", "segments": segments},
+            ):
+                exit_code = stenographer.main([wav.name, "--output", str(output_file)])
+            output_text = output_file.read_text(encoding="utf-8")
+
+        self.assertEqual(exit_code, 0)
+        self.assertEqual(output_text, "[00:00:00 --> 00:00:04] Hej")
+
     def test_main_returns_error_for_nonexistent_file(self) -> None:
         with patch("sys.stderr", new=io.StringIO()) as stderr:
             exit_code = stenographer.main(["/nonexistent/audio.wav"])

@@ -10,26 +10,6 @@ SUPPORTED_EXTENSIONS = {".wav", ".mp3", ".mp4"}
 _CACHE_DIR = Path.home() / ".cache" / "stenographer" / "mlx_models"
 
 
-def _format_timestamp(seconds: float) -> str:
-    total = int(seconds)
-    hours = total // 3600
-    minutes = (total % 3600) // 60
-    secs = total % 60
-    return f"{hours:02d}:{minutes:02d}:{secs:02d}"
-
-
-def _format_segments(segments: list) -> str:
-    lines = []
-    for seg in segments:
-        text = seg.get("text", "").strip()
-        if not text:
-            continue
-        start = _format_timestamp(seg["start"])
-        end = _format_timestamp(seg["end"])
-        lines.append(f"[{start} --> {end}] {text}")
-    return "\n".join(lines)
-
-
 def _validate_audio_path(audio_path: str | Path) -> Path:
     path = Path(audio_path)
     if not path.exists():
@@ -149,7 +129,6 @@ def transcribe_audio(
     duration = segments[-1]["end"] if segments else 0.0
     return {
         "text": result["text"].strip(),
-        "segments": segments,
         "language": result.get("language") or language,
         "duration": duration,
         "model": model_name,
@@ -169,24 +148,17 @@ def main(argv: list[str] | None = None) -> int:
         type=int,
         default=5,
         help="Number of candidate sequences considered at each decoding step (default: 5). "
-        "Higher values improve accuracy at the cost of speed; 1 is greedy (fastest).",
-    )
-    parser.add_argument(
-        "--format",
-        default="segments",
-        choices=["segments", "text"],
-        help="Output format: 'segments' (default) includes timestamps per segment; "
-        "'text' outputs the flat transcript.",
+             "Higher values improve accuracy at the cost of speed; 1 is greedy (fastest).",
     )
     parser.add_argument(
         "--compute-type",
         default="auto",
         choices=["auto", "int8", "float16", "float32"],
         help="Numerical precision for inference (default: auto). "
-        "auto: hardware-optimised automatically. "
-        "int8: fastest/smallest memory, best for CPU, slight accuracy trade-off. "
-        "float16: fast on GPU/Apple Silicon with good accuracy. "
-        "float32: full precision, slowest, most accurate.",
+             "auto: hardware-optimised automatically. "
+             "int8: fastest/smallest memory, best for CPU, slight accuracy trade-off. "
+             "float16: fast on GPU/Apple Silicon with good accuracy. "
+             "float32: full precision, slowest, most accurate.",
     )
     args = parser.parse_args(argv)
 
@@ -198,13 +170,8 @@ def main(argv: list[str] | None = None) -> int:
             beam_size=args.beam_size,
             compute_type=args.compute_type,
         )
-        if args.format == "text":
-            output = result["text"]
-        else:
-            output = _format_segments(result.get("segments", [])) or result["text"]
-
         if args.output:
-            Path(args.output).write_text(output, encoding="utf-8")
+            Path(args.output).write_text(result["text"], encoding="utf-8")
     except (FileNotFoundError, ValueError, RuntimeError, OSError) as exc:
         print(f"Error: {exc}", file=sys.stderr)
         return 1
@@ -214,7 +181,7 @@ def main(argv: list[str] | None = None) -> int:
         return 1
 
     if not args.output:
-        print(output)
+        print(result["text"])
     return 0
 
 
