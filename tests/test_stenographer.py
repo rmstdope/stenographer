@@ -37,7 +37,10 @@ class StenographerTests(unittest.TestCase):
         self.assertEqual(result["model"], "KBLab/kb-whisper-small")
 
     def test_main_writes_output_file(self) -> None:
-        with tempfile.NamedTemporaryFile(suffix=".wav") as wav, tempfile.TemporaryDirectory() as tmpdir:
+        with (
+            tempfile.NamedTemporaryFile(suffix=".wav") as wav,
+            tempfile.TemporaryDirectory() as tmpdir,
+        ):
             output_file = Path(tmpdir) / "out.txt"
             with patch("stenographer.transcribe_audio", return_value={"text": "hej"}):
                 exit_code = stenographer.main([wav.name, "--output", str(output_file)])
