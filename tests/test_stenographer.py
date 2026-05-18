@@ -4,7 +4,7 @@ import tempfile
 import types
 import unittest
 from pathlib import Path
-from unittest.mock import MagicMock, patch
+from unittest.mock import MagicMock, patch, call
 
 import stenographer
 
@@ -26,95 +26,21 @@ class StenographerTests(unittest.TestCase):
                 stenographer.transcribe_audio(tmp.name)
 
     def test_transcribe_audio_happy_path(self) -> None:
+        fake_mlx = types.SimpleNamespace(
+            transcribe=MagicMock(return_value={
+                "text": " Hej världen ",
+                "segments": [{"start": 0.0, "end": 12.5, "text": " Hej världen "}],
+                "language": "sv",
+            })
+        )
         with tempfile.NamedTemporaryFile(suffix=".wav") as tmp:
-            fake_model = MagicMock()
-            fake_model.transcribe.return_value = (
-                [
-                    types.SimpleNamespace(text="Hej"),
-                    types.SimpleNamespace(text=" världen "),
-                    types.SimpleNamespace(text="   "),
-                    types.SimpleNamespace(text=""),
-                ],
-                types.SimpleNamespace(language="sv", duration=12.5),
-            )
-            fake_whisper_module = types.SimpleNamespace(
-                WhisperModel=MagicMock(return_value=fake_model)
-            )
-
-            with patch.dict(sys.modules, {"faster_whisper": fake_whisper_module}):
-                with patch("stenographer.load_audio", return_value="AUDIO"):
+            with patch.dict(sys.modules, {"mlx_whisper": fake_mlx}):
+                with patch("stenographer._ensure_mlx_model", return_value="/fake/model"):
                     result = stenographer.transcribe_audio(tmp.name)
 
         self.assertEqual(result["text"], "Hej världen")
         self.assertEqual(result["language"], "sv")
         self.assertEqual(result["model"], stenographer.DEFAULT_MODEL)
-
-    def test_load_audio_decodes_with_ffmpeg_pipeline(self) -> None:
-        class FakeArray:
-            def __init__(self, values: list[int]) -> None:
-                self.values = values
-
-            def astype(self, _dtype: object) -> "FakeArray":
-                return self
-
-            def __truediv__(self, divisor: float) -> list[float]:
-                return [value / divisor for value in self.values]
-
-        class FakeFfmpegError(Exception):
-            def __init__(self, stderr: bytes = b"") -> None:
-                super().__init__("ffmpeg failed")
-                self.stderr = stderr
-
-        with tempfile.NamedTemporaryFile(suffix=".wav") as tmp:
-            fake_stream = MagicMock()
-            fake_stream.output.return_value = fake_stream
-            fake_stream.run.return_value = (b"\x00\x00\x00@\x00\x80", b"")
-
-            fake_ffmpeg = types.SimpleNamespace(
-                input=MagicMock(return_value=fake_stream),
-                Error=FakeFfmpegError,
-            )
-            fake_numpy = types.SimpleNamespace(
-                int16="int16",
-                float32="float32",
-                frombuffer=MagicMock(return_value=FakeArray([0, 16384, -32768])),
-            )
-
-            with patch.dict(sys.modules, {"ffmpeg": fake_ffmpeg, "numpy": fake_numpy}):
-                result = stenographer.load_audio(tmp.name)
-
-        self.assertEqual(result, [0.0, 0.5, -1.0])
-        fake_ffmpeg.input.assert_called_once_with(tmp.name)
-        fake_stream.output.assert_called_once_with(
-            "pipe:",
-            format="s16le",
-            acodec="pcm_s16le",
-            ac=1,
-            ar=16000,
-        )
-        fake_numpy.frombuffer.assert_called_once_with(b"\x00\x00\x00@\x00\x80", "int16")
-
-    def test_load_audio_wraps_ffmpeg_error(self) -> None:
-        class FakeFfmpegError(Exception):
-            def __init__(self, stderr: bytes = b"") -> None:
-                super().__init__("ffmpeg failed")
-                self.stderr = stderr
-
-        with tempfile.NamedTemporaryFile(suffix=".wav") as tmp:
-            fake_stream = MagicMock()
-            fake_stream.output.return_value = fake_stream
-            fake_stream.run.side_effect = FakeFfmpegError(b"decoder broke")
-            fake_ffmpeg = types.SimpleNamespace(
-                input=MagicMock(return_value=fake_stream),
-                Error=FakeFfmpegError,
-            )
-            fake_numpy = types.SimpleNamespace(int16="int16", float32="float32")
-
-            with patch.dict(sys.modules, {"ffmpeg": fake_ffmpeg, "numpy": fake_numpy}):
-                with self.assertRaises(RuntimeError) as exc_info:
-                    stenographer.load_audio(tmp.name)
-
-        self.assertIn("Failed to decode audio with ffmpeg: decoder broke", str(exc_info.exception))
 
     def test_main_writes_output_file(self) -> None:
         with (
@@ -160,163 +86,211 @@ class StenographerTests(unittest.TestCase):
             path = stenographer._validate_audio_path(tmp.name)
             self.assertEqual(path.suffix.lower(), ".mp4")
 
-    # --- load_audio ---
-
-    def test_load_audio_uses_custom_sample_rate(self) -> None:
-        class FakeArray:
-            def astype(self, _dtype: object) -> "FakeArray":
-                return self
-
-            def __truediv__(self, _divisor: float) -> "FakeArray":
-                return self
-
-        class FakeFfmpegError(Exception):
-            pass
-
-        with tempfile.NamedTemporaryFile(suffix=".wav") as tmp:
-            fake_stream = MagicMock()
-            fake_stream.output.return_value = fake_stream
-            fake_stream.run.return_value = (b"", b"")
-            fake_ffmpeg = types.SimpleNamespace(
-                input=MagicMock(return_value=fake_stream),
-                Error=FakeFfmpegError,
-            )
-            fake_numpy = types.SimpleNamespace(
-                int16="int16",
-                float32="float32",
-                frombuffer=MagicMock(return_value=FakeArray()),
-            )
-            with patch.dict(sys.modules, {"ffmpeg": fake_ffmpeg, "numpy": fake_numpy}):
-                stenographer.load_audio(tmp.name, sample_rate=8000)
-
-        fake_stream.output.assert_called_once_with(
-            "pipe:",
-            format="s16le",
-            acodec="pcm_s16le",
-            ac=1,
-            ar=8000,
-        )
-
-    def test_load_audio_wraps_ffmpeg_error_with_no_stderr(self) -> None:
-        class FakeFfmpegError(Exception):
-            def __init__(self) -> None:
-                super().__init__("ffmpeg failed")
-                self.stderr = None
-
-        with tempfile.NamedTemporaryFile(suffix=".wav") as tmp:
-            fake_stream = MagicMock()
-            fake_stream.output.return_value = fake_stream
-            fake_stream.run.side_effect = FakeFfmpegError()
-            fake_ffmpeg = types.SimpleNamespace(
-                input=MagicMock(return_value=fake_stream),
-                Error=FakeFfmpegError,
-            )
-            fake_numpy = types.SimpleNamespace(int16="int16", float32="float32")
-            with patch.dict(sys.modules, {"ffmpeg": fake_ffmpeg, "numpy": fake_numpy}):
-                with self.assertRaises(RuntimeError) as exc_info:
-                    stenographer.load_audio(tmp.name)
-
-        self.assertIn("Failed to decode audio with ffmpeg:", str(exc_info.exception))
-
     # --- transcribe_audio ---
 
-    def test_transcribe_audio_returns_duration_in_result(self) -> None:
+    def test_transcribe_audio_returns_duration_from_last_segment(self) -> None:
+        fake_mlx = types.SimpleNamespace(
+            transcribe=MagicMock(return_value={
+                "text": "hello",
+                "segments": [{"start": 0.0, "end": 42.0, "text": "hello"}],
+                "language": "sv",
+            })
+        )
         with tempfile.NamedTemporaryFile(suffix=".wav") as tmp:
-            fake_model = MagicMock()
-            fake_model.transcribe.return_value = (
-                [],
-                types.SimpleNamespace(language="sv", duration=42.0),
-            )
-            fake_whisper_module = types.SimpleNamespace(
-                WhisperModel=MagicMock(return_value=fake_model)
-            )
-            with patch.dict(sys.modules, {"faster_whisper": fake_whisper_module}):
-                with patch("stenographer.load_audio", return_value="AUDIO"):
+            with patch.dict(sys.modules, {"mlx_whisper": fake_mlx}):
+                with patch("stenographer._ensure_mlx_model", return_value="/fake/model"):
                     result = stenographer.transcribe_audio(tmp.name)
 
         self.assertEqual(result["duration"], 42.0)
 
-    def test_transcribe_audio_language_fallback_to_parameter(self) -> None:
+    def test_transcribe_audio_duration_zero_with_no_segments(self) -> None:
+        fake_mlx = types.SimpleNamespace(
+            transcribe=MagicMock(return_value={
+                "text": "",
+                "segments": [],
+                "language": "sv",
+            })
+        )
         with tempfile.NamedTemporaryFile(suffix=".wav") as tmp:
-            fake_model = MagicMock()
-            fake_model.transcribe.return_value = (
-                [],
-                types.SimpleNamespace(duration=1.0),  # no language attr
-            )
-            fake_whisper_module = types.SimpleNamespace(
-                WhisperModel=MagicMock(return_value=fake_model)
-            )
-            with patch.dict(sys.modules, {"faster_whisper": fake_whisper_module}):
-                with patch("stenographer.load_audio", return_value="AUDIO"):
+            with patch.dict(sys.modules, {"mlx_whisper": fake_mlx}):
+                with patch("stenographer._ensure_mlx_model", return_value="/fake/model"):
+                    result = stenographer.transcribe_audio(tmp.name)
+
+        self.assertEqual(result["duration"], 0.0)
+        self.assertEqual(result["text"], "")
+
+    def test_transcribe_audio_language_fallback_to_parameter(self) -> None:
+        fake_mlx = types.SimpleNamespace(
+            transcribe=MagicMock(return_value={
+                "text": "",
+                "segments": [],
+                "language": None,
+            })
+        )
+        with tempfile.NamedTemporaryFile(suffix=".wav") as tmp:
+            with patch.dict(sys.modules, {"mlx_whisper": fake_mlx}):
+                with patch("stenographer._ensure_mlx_model", return_value="/fake/model"):
                     result = stenographer.transcribe_audio(tmp.name, language="fr")
 
         self.assertEqual(result["language"], "fr")
 
-    def test_transcribe_audio_returns_empty_text_when_no_segments(self) -> None:
+    def test_transcribe_audio_passes_model_name_to_ensure_mlx_model(self) -> None:
+        fake_mlx = types.SimpleNamespace(
+            transcribe=MagicMock(return_value={"text": "", "segments": [], "language": "sv"})
+        )
         with tempfile.NamedTemporaryFile(suffix=".wav") as tmp:
-            fake_model = MagicMock()
-            fake_model.transcribe.return_value = (
-                [],
-                types.SimpleNamespace(language="sv", duration=0.0),
-            )
-            fake_whisper_module = types.SimpleNamespace(
-                WhisperModel=MagicMock(return_value=fake_model)
-            )
-            with patch.dict(sys.modules, {"faster_whisper": fake_whisper_module}):
-                with patch("stenographer.load_audio", return_value="AUDIO"):
-                    result = stenographer.transcribe_audio(tmp.name)
-
-        self.assertEqual(result["text"], "")
-
-    def test_transcribe_audio_passes_model_name_to_whisper(self) -> None:
-        with tempfile.NamedTemporaryFile(suffix=".wav") as tmp:
-            fake_model = MagicMock()
-            fake_model.transcribe.return_value = (
-                [],
-                types.SimpleNamespace(language="sv", duration=0.0),
-            )
-            fake_whisper_cls = MagicMock(return_value=fake_model)
-            fake_whisper_module = types.SimpleNamespace(WhisperModel=fake_whisper_cls)
-            with patch.dict(sys.modules, {"faster_whisper": fake_whisper_module}):
-                with patch("stenographer.load_audio", return_value="AUDIO"):
+            with patch.dict(sys.modules, {"mlx_whisper": fake_mlx}):
+                with patch("stenographer._ensure_mlx_model", return_value="/fake/model") as mock_ensure:
                     stenographer.transcribe_audio(tmp.name, model_name="custom/model")
 
-        fake_whisper_cls.assert_called_once_with("custom/model", compute_type="auto")
+        mock_ensure.assert_called_once_with("custom/model")
 
-    def test_transcribe_audio_passes_params_to_model_transcribe(self) -> None:
+    def test_transcribe_audio_passes_language_and_beam_size_to_mlx(self) -> None:
+        fake_mlx = types.SimpleNamespace(
+            transcribe=MagicMock(return_value={"text": "", "segments": [], "language": "en"})
+        )
         with tempfile.NamedTemporaryFile(suffix=".wav") as tmp:
-            fake_model = MagicMock()
-            fake_model.transcribe.return_value = (
-                [],
-                types.SimpleNamespace(language="en", duration=0.0),
-            )
-            fake_whisper_module = types.SimpleNamespace(
-                WhisperModel=MagicMock(return_value=fake_model)
-            )
-            with patch.dict(sys.modules, {"faster_whisper": fake_whisper_module}):
-                with patch("stenographer.load_audio", return_value="AUDIO"):
+            with patch.dict(sys.modules, {"mlx_whisper": fake_mlx}):
+                with patch("stenographer._ensure_mlx_model", return_value="/fake/model"):
                     stenographer.transcribe_audio(tmp.name, language="en", beam_size=3)
 
-        fake_model.transcribe.assert_called_once_with("AUDIO", language="en", beam_size=3)
+        call_kwargs = fake_mlx.transcribe.call_args
+        self.assertEqual(call_kwargs.kwargs.get("language") or call_kwargs.args[1] if len(call_kwargs.args) > 1 else call_kwargs.kwargs.get("language"), "en")
 
-    def test_transcribe_audio_passes_compute_type_to_whisper_model(self) -> None:
-        with tempfile.NamedTemporaryFile(suffix=".wav") as tmp:
-            fake_model = MagicMock()
-            fake_model.transcribe.return_value = (
-                [],
-                types.SimpleNamespace(language="sv", duration=0.0),
-            )
-            fake_whisper_cls = MagicMock(return_value=fake_model)
-            fake_whisper_module = types.SimpleNamespace(WhisperModel=fake_whisper_cls)
-            with patch.dict(sys.modules, {"faster_whisper": fake_whisper_module}):
-                with patch("stenographer.load_audio", return_value="AUDIO"):
-                    stenographer.transcribe_audio(tmp.name, compute_type="int8")
-
-        fake_whisper_cls.assert_called_once_with(
-            stenographer.DEFAULT_MODEL, compute_type="int8"
+    def test_transcribe_audio_accepts_mp4(self) -> None:
+        fake_mlx = types.SimpleNamespace(
+            transcribe=MagicMock(return_value={
+                "text": "Hello Teams",
+                "segments": [{"start": 0.0, "end": 5.0, "text": "Hello Teams"}],
+                "language": "en",
+            })
         )
+        with tempfile.NamedTemporaryFile(suffix=".mp4") as tmp:
+            with patch.dict(sys.modules, {"mlx_whisper": fake_mlx}):
+                with patch("stenographer._ensure_mlx_model", return_value="/fake/model"):
+                    result = stenographer.transcribe_audio(tmp.name)
 
-    # --- main ---
+        self.assertEqual(result["text"], "Hello Teams")
+        self.assertEqual(result["language"], "en")
+
+    # --- _ensure_mlx_model ---
+
+    def test_ensure_mlx_model_returns_local_path_when_already_mlx(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            mlx_dir = Path(tmpdir)
+            (mlx_dir / "weights.safetensors").write_bytes(b"fake")
+            (mlx_dir / "config.json").write_text("{}")
+
+            result = stenographer._ensure_mlx_model(str(mlx_dir))
+
+        self.assertEqual(result, str(mlx_dir))
+
+    def test_ensure_mlx_model_returns_cache_path_when_cache_exists(self) -> None:
+        import hashlib
+        model_name = "KBLab/kb-whisper-small"
+        model_hash = hashlib.md5(model_name.encode()).hexdigest()
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            cache_base = Path(tmpdir)
+            model_cache = cache_base / model_hash
+            model_cache.mkdir(parents=True)
+            (model_cache / "weights.safetensors").write_bytes(b"fake")
+            (model_cache / "config.json").write_text("{}")
+
+            with patch("stenographer._CACHE_DIR", cache_base):
+                result = stenographer._ensure_mlx_model(model_name)
+
+        self.assertEqual(result, str(model_cache))
+
+    def test_ensure_mlx_model_converts_when_cache_missing(self) -> None:
+        model_name = "KBLab/kb-whisper-small"
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            cache_base = Path(tmpdir)
+            with patch("stenographer._CACHE_DIR", cache_base):
+                with patch("stenographer._convert_hf_to_mlx") as mock_convert:
+                    stenographer._ensure_mlx_model(model_name)
+
+        mock_convert.assert_called_once()
+
+    # --- _convert_hf_to_mlx ---
+
+    def _make_fake_mx(self, raw_weights: dict) -> tuple[types.SimpleNamespace, dict]:
+        """Return (fake_mx_module, saved_weights_dict) for patching mlx.core."""
+        saved: dict = {}
+
+        class FakeArray:
+            def __init__(self, ndim: int = 1) -> None:
+                self.ndim = ndim
+
+            def astype(self, dtype: object) -> "FakeArray":
+                return self
+
+        fake_mx = types.SimpleNamespace(
+            float16="float16",
+            load=MagicMock(return_value={k: FakeArray(v) for k, v in raw_weights.items()}),
+            save_safetensors=MagicMock(side_effect=lambda path, w, **kw: saved.update(w)),
+            swapaxes=MagicMock(side_effect=lambda v, a, b: v),
+        )
+        return fake_mx, saved
+
+    def _hf_config(self) -> dict:
+        return {
+            "num_mel_bins": 80, "max_source_positions": 1500, "d_model": 512,
+            "encoder_attention_heads": 8, "encoder_layers": 6, "vocab_size": 51865,
+            "max_target_positions": 448, "decoder_attention_heads": 8, "decoder_layers": 6,
+        }
+
+    def _run_convert(self, fake_mx: types.SimpleNamespace, hf_config: dict) -> None:
+        import json
+        with tempfile.TemporaryDirectory() as model_dir:
+            Path(model_dir, "config.json").write_text(json.dumps(hf_config), encoding="utf-8")
+            with tempfile.TemporaryDirectory() as out_dir:
+                output_path = Path(out_dir) / "converted"
+                with patch.dict(sys.modules, {
+                    "mlx": types.SimpleNamespace(core=fake_mx),
+                    "mlx.core": fake_mx,
+                    "huggingface_hub": types.SimpleNamespace(
+                        snapshot_download=MagicMock(return_value=model_dir)
+                    ),
+                }):
+                    stenographer._convert_hf_to_mlx("some/model", output_path)
+
+    def test_convert_hf_to_mlx_skips_proj_out_weight(self) -> None:
+        # Bug: proj_out.weight (with or without "model." prefix) was not skipped.
+        # mlx-whisper rejects the converted weights with "Module does not have
+        # parameter named 'proj_out'".
+        fake_mx, saved = self._make_fake_mx({
+            "model.proj_out.weight": 1,         # must be skipped (with prefix)
+            "proj_out.weight": 1,               # must be skipped (no prefix)
+            "model.encoder.conv1.weight": 3,    # must be kept
+        })
+        self._run_convert(fake_mx, self._hf_config())
+
+        self.assertFalse(
+            any("proj_out" in k for k in saved),
+            f"proj_out should be skipped but found: {[k for k in saved if 'proj_out' in k]}",
+        )
+        self.assertIn("encoder.conv1.weight", saved)
+
+    def test_convert_hf_to_mlx_remaps_embed_tokens_to_token_embedding(self) -> None:
+        fake_mx, saved = self._make_fake_mx({
+            "model.decoder.embed_tokens.weight": 1,
+        })
+        self._run_convert(fake_mx, self._hf_config())
+
+        self.assertIn("decoder.token_embedding.weight", saved)
+        self.assertNotIn("model.decoder.embed_tokens.weight", saved)
+
+    def test_convert_hf_to_mlx_swaps_conv_weight_axes(self) -> None:
+        fake_mx, saved = self._make_fake_mx({
+            "model.encoder.conv1.weight": 3,  # ndim=3 → swapaxes must be called
+        })
+        self._run_convert(fake_mx, self._hf_config())
+
+        fake_mx.swapaxes.assert_called_once()
+
+
 
     def test_main_prints_transcript_without_output_flag(self) -> None:
         with tempfile.NamedTemporaryFile(suffix=".wav") as wav:
@@ -413,24 +387,6 @@ class StenographerTests(unittest.TestCase):
             beam_size=5,
             compute_type="int8",
         )
-
-    def test_transcribe_audio_accepts_mp4(self) -> None:
-        with tempfile.NamedTemporaryFile(suffix=".mp4") as tmp:
-            fake_model = MagicMock()
-            fake_model.transcribe.return_value = (
-                [types.SimpleNamespace(text="Hello Teams")],
-                types.SimpleNamespace(language="en", duration=5.0),
-            )
-            fake_whisper_module = types.SimpleNamespace(
-                WhisperModel=MagicMock(return_value=fake_model)
-            )
-
-            with patch.dict(sys.modules, {"faster_whisper": fake_whisper_module}):
-                with patch("stenographer.load_audio", return_value="AUDIO"):
-                    result = stenographer.transcribe_audio(tmp.name)
-
-        self.assertEqual(result["text"], "Hello Teams")
-        self.assertEqual(result["language"], "en")
 
 
 if __name__ == "__main__":

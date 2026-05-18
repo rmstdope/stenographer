@@ -7,6 +7,7 @@ from typing import Any
 
 DEFAULT_MODEL = "KBLab/kb-whisper-small"
 SUPPORTED_EXTENSIONS = {".wav", ".mp3", ".mp4"}
+_CACHE_DIR = Path.home() / ".cache" / "stenographer" / "mlx_models"
 
 
 def _validate_audio_path(audio_path: str | Path) -> Path:
@@ -22,29 +23,88 @@ def _validate_audio_path(audio_path: str | Path) -> Path:
     return path
 
 
-def load_audio(audio_path: str | Path, sample_rate: int = 16000) -> Any:
-    path = _validate_audio_path(audio_path)
+_SKIP_KEYS = {"proj_out.weight"}
+_KEY_REPLACEMENTS = [
+    (".layers.", ".blocks."),
+    (".self_attn.", ".attn."),
+    (".self_attn_layer_norm.", ".attn_ln."),
+    (".encoder_attn.", ".cross_attn."),
+    (".encoder_attn_layer_norm.", ".cross_attn_ln."),
+    (".final_layer_norm.", ".mlp_ln."),
+    (".q_proj.", ".query."),
+    (".k_proj.", ".key."),
+    (".v_proj.", ".value."),
+    (".out_proj.", ".out."),
+    (".fc1.", ".mlp1."),
+    (".fc2.", ".mlp2."),
+    (".mlp.0.", ".mlp1."),
+    (".mlp.2.", ".mlp2."),
+    ("embed_positions.weight", "positional_embedding"),
+    ("embed_tokens.weight", "token_embedding.weight"),
+    ("encoder.layer_norm.", "encoder.ln_post."),
+    ("decoder.layer_norm.", "decoder.ln."),
+]
 
-    import ffmpeg  # type: ignore
-    import numpy as np  # type: ignore
 
-    try:
-        output, _ = (
-            ffmpeg.input(str(path))
-            .output(
-                "pipe:",
-                format="s16le",
-                acodec="pcm_s16le",
-                ac=1,
-                ar=sample_rate,
-            )
-            .run(capture_stdout=True, capture_stderr=True, quiet=True)
-        )
-    except ffmpeg.Error as exc:  # type: ignore[attr-defined]
-        stderr = exc.stderr.decode("utf-8", errors="ignore") if exc.stderr else ""
-        raise RuntimeError(f"Failed to decode audio with ffmpeg: {stderr}") from exc
+def _convert_hf_to_mlx(model_name: str, output_path: Path) -> None:
+    import json
 
-    return np.frombuffer(output, np.int16).astype(np.float32) / 32768.0
+    import mlx.core as mx  # type: ignore
+    from huggingface_hub import snapshot_download  # type: ignore
+
+    model_dir = Path(snapshot_download(model_name))
+
+    with open(model_dir / "config.json", encoding="utf-8") as f:
+        hf_config = json.load(f)
+
+    mlx_config = {
+        "model_type": "whisper",
+        "n_mels": hf_config["num_mel_bins"],
+        "n_audio_ctx": hf_config["max_source_positions"],
+        "n_audio_state": hf_config["d_model"],
+        "n_audio_head": hf_config["encoder_attention_heads"],
+        "n_audio_layer": hf_config["encoder_layers"],
+        "n_vocab": hf_config["vocab_size"],
+        "n_text_ctx": hf_config["max_target_positions"],
+        "n_text_state": hf_config["d_model"],
+        "n_text_head": hf_config["decoder_attention_heads"],
+        "n_text_layer": hf_config["decoder_layers"],
+    }
+
+    raw_weights = dict(mx.load(str(model_dir / "model.safetensors")))
+
+    new_weights: dict[str, Any] = {}
+    for key, value in raw_weights.items():
+        if key.startswith("model."):
+            key = key[6:]
+        if key in _SKIP_KEYS:
+            continue
+        for old, new in _KEY_REPLACEMENTS:
+            key = key.replace(old, new)
+        if "conv" in key and value.ndim == 3:
+            value = mx.swapaxes(value, 1, 2)
+        new_weights[key] = value.astype(mx.float16)
+
+    output_path.mkdir(parents=True, exist_ok=True)
+    mx.save_safetensors(str(output_path / "weights.safetensors"), new_weights)
+    with open(output_path / "config.json", "w", encoding="utf-8") as f:
+        json.dump(mlx_config, f, indent=2)
+
+
+def _ensure_mlx_model(model_name: str) -> str:
+    import hashlib
+
+    local = Path(model_name)
+    if local.exists() and (local / "weights.safetensors").exists():
+        return model_name
+
+    model_hash = hashlib.md5(model_name.encode()).hexdigest()
+    model_cache = _CACHE_DIR / model_hash
+    if (model_cache / "weights.safetensors").exists() and (model_cache / "config.json").exists():
+        return str(model_cache)
+
+    _convert_hf_to_mlx(model_name, model_cache)
+    return str(model_cache)
 
 
 def transcribe_audio(
@@ -54,32 +114,31 @@ def transcribe_audio(
     beam_size: int = 5,
     compute_type: str = "auto",
 ) -> dict[str, Any]:
-    _validate_audio_path(audio_path)
-    audio = load_audio(audio_path)
+    path = _validate_audio_path(audio_path)
+    mlx_model_path = _ensure_mlx_model(model_name)
 
-    from faster_whisper import WhisperModel  # type: ignore
+    import mlx_whisper  # type: ignore
 
-    model = WhisperModel(model_name, compute_type=compute_type)
+    result = mlx_whisper.transcribe(
+        str(path),
+        path_or_hf_repo=mlx_model_path,
+        language=language,
+        beam_size=beam_size,
+    )
 
-    segments, info = model.transcribe(audio, language=language, beam_size=beam_size)
-
-    segment_texts = []
-    for segment in segments:
-        cleaned_text = getattr(segment, "text", "").strip()
-        if cleaned_text:
-            segment_texts.append(cleaned_text)
-    text = " ".join(segment_texts)
+    segments = result.get("segments", [])
+    duration = segments[-1]["end"] if segments else 0.0
     return {
-        "text": text,
-        "language": getattr(info, "language", language),
-        "duration": getattr(info, "duration", None),
+        "text": result["text"].strip(),
+        "language": result.get("language") or language,
+        "duration": duration,
         "model": model_name,
     }
 
 
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(
-        description="Transcribe WAV/MP3/MP4 recordings to text using faster-whisper and KBLab models."
+        description="Transcribe WAV/MP3/MP4 recordings to text using mlx-whisper and KBLab models."
     )
     parser.add_argument("audio", help="Path to input audio/video file (.wav, .mp3 or .mp4)")
     parser.add_argument("-o", "--output", help="Optional path to write transcript text")

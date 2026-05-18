@@ -222,5 +222,8 @@ __marimo__/
 *.wav
 *.mp3
 
+# Transcription files
+*.txt
+
 # Temporary files
 *.tmp
