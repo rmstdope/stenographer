@@ -85,12 +85,22 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("-o", "--output", help="Optional path to write transcript text")
     parser.add_argument("--model", default=DEFAULT_MODEL, help="Whisper model name")
     parser.add_argument("--language", help="Language code (e.g. sv, en)")
-    parser.add_argument("--beam-size", type=int, default=5, help="Beam size for decoding")
+    parser.add_argument(
+        "--beam-size",
+        type=int,
+        default=5,
+        help="Number of candidate sequences considered at each decoding step (default: 5). "
+             "Higher values improve accuracy at the cost of speed; 1 is greedy (fastest).",
+    )
     parser.add_argument(
         "--compute-type",
         default="auto",
         choices=["auto", "int8", "float16", "float32"],
-        help="Compute type for faster-whisper (auto, int8, float16, float32)",
+        help="Numerical precision for inference (default: auto). "
+             "auto: hardware-optimised automatically. "
+             "int8: fastest/smallest memory, best for CPU, slight accuracy trade-off. "
+             "float16: fast on GPU/Apple Silicon with good accuracy. "
+             "float32: full precision, slowest, most accurate.",
     )
     args = parser.parse_args(argv)
 
