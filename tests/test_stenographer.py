@@ -10,6 +10,11 @@ import stenographer
 
 
 class StenographerTests(unittest.TestCase):
+    def test_default_model_is_valid_kblab_id(self) -> None:
+        # KBLab publishes the model as "KBLab/kb-whisper-small" for faster-whisper.
+        # The "-ct2" suffix does not exist on HuggingFace and causes a 401 error.
+        self.assertEqual(stenographer.DEFAULT_MODEL, "KBLab/kb-whisper-small")
+
     def test_validate_audio_path_rejects_directory(self) -> None:
         with tempfile.TemporaryDirectory(suffix=".mp3") as tmpdir:
             with self.assertRaises(ValueError):

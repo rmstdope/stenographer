@@ -5,7 +5,7 @@ import sys
 from pathlib import Path
 from typing import Any
 
-DEFAULT_MODEL = "KBLab/kb-whisper-small-ct2"
+DEFAULT_MODEL = "KBLab/kb-whisper-small"
 SUPPORTED_EXTENSIONS = {".wav", ".mp3", ".mp4"}
 
 
