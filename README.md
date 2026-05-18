@@ -15,7 +15,13 @@ A Python application that transcribes WAV, MP3, or MP4 recordings to text.
 python --version  # Requires Python 3.10+
 python -m venv .venv
 source .venv/bin/activate
-pip install -r requirements.txt
+pip install -e .
+```
+
+For development (includes pytest and ruff):
+
+```bash
+pip install -e ".[dev]"
 ```
 
 You also need `ffmpeg` installed on your system (`brew install ffmpeg`).
@@ -27,9 +33,9 @@ On the first transcription, `stenographer` automatically downloads `KBLab/kb-whi
 ## Usage
 
 ```bash
-python stenographer.py path/to/audio.wav
-python stenographer.py path/to/audio.mp3 --language sv --output transcript.txt
-python stenographer.py path/to/recording.mp4 --language sv --output transcript.txt
+stenographer path/to/audio.wav
+stenographer path/to/audio.mp3 --language sv --output transcript.txt
+stenographer path/to/recording.mp4 --language sv --output transcript.txt
 ```
 
 Options:

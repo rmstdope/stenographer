@@ -1,0 +1,32 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "stenographer"
+version = "0.1.0"
+description = "Transcribes audio/video recordings to text using mlx-whisper and KBLab models"
+readme = "README.md"
+requires-python = ">=3.10"
+dependencies = [
+    "mlx-whisper>=0.4.0; sys_platform == 'darwin'",
+    "huggingface_hub>=0.24.0",
+]
+
+[project.optional-dependencies]
+dev = ["pytest", "ruff"]
+
+[project.scripts]
+stenographer = "stenographer:main"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/stenographer"]
+
+[tool.pytest.ini_options]
+pythonpath = ["src"]
+
+[tool.ruff]
+line-length = 100
+
+[tool.ruff.lint]
+select = ["E", "F", "I"]
