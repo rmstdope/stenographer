@@ -16,14 +16,18 @@ class StenographerTests(unittest.TestCase):
         self.assertEqual(stenographer.DEFAULT_MODEL, "KBLab/kb-whisper-small")
 
     def test_validate_audio_path_rejects_directory(self) -> None:
-        with tempfile.TemporaryDirectory(suffix=".mp3") as tmpdir:
-            with self.assertRaises(ValueError):
-                stenographer._validate_audio_path(tmpdir)
+        with (
+            tempfile.TemporaryDirectory(suffix=".mp3") as tmpdir,
+            self.assertRaises(ValueError),
+        ):
+            stenographer._validate_audio_path(tmpdir)
 
     def test_transcribe_audio_rejects_unsupported_extension(self) -> None:
-        with tempfile.NamedTemporaryFile(suffix=".txt") as tmp:
-            with self.assertRaises(ValueError):
-                stenographer.transcribe_audio(tmp.name)
+        with (
+            tempfile.NamedTemporaryFile(suffix=".txt") as tmp,
+            self.assertRaises(ValueError),
+        ):
+            stenographer.transcribe_audio(tmp.name)
 
     def test_transcribe_audio_happy_path(self) -> None:
         fake_mlx = types.SimpleNamespace(
@@ -35,12 +39,15 @@ class StenographerTests(unittest.TestCase):
                 }
             )
         )
-        with tempfile.NamedTemporaryFile(suffix=".wav") as tmp:
-            with patch.dict(sys.modules, {"mlx_whisper": fake_mlx}):
-                with patch(
-                    "stenographer.stenographer._ensure_mlx_model", return_value="/fake/model"
-                ):
-                    result = stenographer.transcribe_audio(tmp.name)
+        with (
+            tempfile.NamedTemporaryFile(suffix=".wav") as tmp,
+            patch.dict(sys.modules, {"mlx_whisper": fake_mlx}),
+            patch(
+                "stenographer.stenographer._ensure_mlx_model",
+                return_value="/fake/model",
+            ),
+        ):
+            result = stenographer.transcribe_audio(tmp.name)
 
         self.assertEqual(result["text"], "Hej världen")
         self.assertEqual(result["language"], "sv")
@@ -52,9 +59,16 @@ class StenographerTests(unittest.TestCase):
             tempfile.TemporaryDirectory() as tmpdir,
         ):
             output_file = Path(tmpdir) / "out.txt"
-            with patch("stenographer.stenographer.transcribe_audio", return_value={"text": "hej"}):
-                with patch("sys.stdout", new=io.StringIO()) as stdout:
-                    exit_code = stenographer.main([wav.name, "--output", str(output_file)])
+            with (
+                patch(
+                    "stenographer.stenographer.transcribe_audio",
+                    return_value={"text": "hej"},
+                ),
+                patch("sys.stdout", new=io.StringIO()) as stdout,
+            ):
+                exit_code = stenographer.main(
+                    [wav.name, "--output", str(output_file)]
+                )
             output_text = output_file.read_text(encoding="utf-8")
             cli_output = stdout.getvalue()
 
@@ -65,11 +79,19 @@ class StenographerTests(unittest.TestCase):
     def test_main_returns_error_when_output_write_fails(self) -> None:
         with (
             tempfile.NamedTemporaryFile(suffix=".wav") as wav,
-            patch("stenographer.stenographer.transcribe_audio", return_value={"text": "hej"}),
-            patch("stenographer.stenographer.Path.write_text", side_effect=OSError("cannot write")),
+            patch(
+                "stenographer.stenographer.transcribe_audio",
+                return_value={"text": "hej"},
+            ),
+            patch(
+                "stenographer.stenographer.Path.write_text",
+                side_effect=OSError("cannot write"),
+            ),
             patch("sys.stderr", new=io.StringIO()) as stderr,
         ):
-            exit_code = stenographer.main([wav.name, "--output", "/tmp/nowhere/out.txt"])
+            exit_code = stenographer.main(
+                [wav.name, "--output", "/tmp/nowhere/out.txt"]
+            )
 
         self.assertEqual(exit_code, 1)
         self.assertIn("Error: cannot write", stderr.getvalue())
@@ -78,7 +100,9 @@ class StenographerTests(unittest.TestCase):
 
     def test_validate_audio_path_rejects_nonexistent_file(self) -> None:
         with self.assertRaises(FileNotFoundError):
-            stenographer._validate_audio_path("/nonexistent/certainly/not/here/audio.wav")
+            stenographer._validate_audio_path(
+                "/nonexistent/certainly/not/here/audio.wav"
+            )
 
     def test_validate_audio_path_is_case_insensitive(self) -> None:
         with tempfile.NamedTemporaryFile(suffix=".WAV") as tmp:
@@ -102,12 +126,15 @@ class StenographerTests(unittest.TestCase):
                 }
             )
         )
-        with tempfile.NamedTemporaryFile(suffix=".wav") as tmp:
-            with patch.dict(sys.modules, {"mlx_whisper": fake_mlx}):
-                with patch(
-                    "stenographer.stenographer._ensure_mlx_model", return_value="/fake/model"
-                ):
-                    result = stenographer.transcribe_audio(tmp.name)
+        with (
+            tempfile.NamedTemporaryFile(suffix=".wav") as tmp,
+            patch.dict(sys.modules, {"mlx_whisper": fake_mlx}),
+            patch(
+                "stenographer.stenographer._ensure_mlx_model",
+                return_value="/fake/model",
+            ),
+        ):
+            result = stenographer.transcribe_audio(tmp.name)
 
         self.assertEqual(result["duration"], 42.0)
 
@@ -121,12 +148,15 @@ class StenographerTests(unittest.TestCase):
                 }
             )
         )
-        with tempfile.NamedTemporaryFile(suffix=".wav") as tmp:
-            with patch.dict(sys.modules, {"mlx_whisper": fake_mlx}):
-                with patch(
-                    "stenographer.stenographer._ensure_mlx_model", return_value="/fake/model"
-                ):
-                    result = stenographer.transcribe_audio(tmp.name)
+        with (
+            tempfile.NamedTemporaryFile(suffix=".wav") as tmp,
+            patch.dict(sys.modules, {"mlx_whisper": fake_mlx}),
+            patch(
+                "stenographer.stenographer._ensure_mlx_model",
+                return_value="/fake/model",
+            ),
+        ):
+            result = stenographer.transcribe_audio(tmp.name)
 
         self.assertEqual(result["duration"], 0.0)
         self.assertEqual(result["text"], "")
@@ -141,43 +171,57 @@ class StenographerTests(unittest.TestCase):
                 }
             )
         )
-        with tempfile.NamedTemporaryFile(suffix=".wav") as tmp:
-            with patch.dict(sys.modules, {"mlx_whisper": fake_mlx}):
-                with patch(
-                    "stenographer.stenographer._ensure_mlx_model", return_value="/fake/model"
-                ):
-                    result = stenographer.transcribe_audio(tmp.name, language="fr")
+        with (
+            tempfile.NamedTemporaryFile(suffix=".wav") as tmp,
+            patch.dict(sys.modules, {"mlx_whisper": fake_mlx}),
+            patch(
+                "stenographer.stenographer._ensure_mlx_model",
+                return_value="/fake/model",
+            ),
+        ):
+            result = stenographer.transcribe_audio(tmp.name, language="fr")
 
         self.assertEqual(result["language"], "fr")
 
     def test_transcribe_audio_passes_model_name_to_ensure_mlx_model(self) -> None:
         fake_mlx = types.SimpleNamespace(
-            transcribe=MagicMock(return_value={"text": "", "segments": [], "language": "sv"})
+            transcribe=MagicMock(
+                return_value={"text": "", "segments": [], "language": "sv"}
+            )
         )
-        with tempfile.NamedTemporaryFile(suffix=".wav") as tmp:
-            with patch.dict(sys.modules, {"mlx_whisper": fake_mlx}):
-                with patch(
-                    "stenographer.stenographer._ensure_mlx_model", return_value="/fake/model"
-                ) as mock_ensure:
-                    stenographer.transcribe_audio(tmp.name, model_name="custom/model")
+        with (
+            tempfile.NamedTemporaryFile(suffix=".wav") as tmp,
+            patch.dict(sys.modules, {"mlx_whisper": fake_mlx}),
+            patch(
+                "stenographer.stenographer._ensure_mlx_model",
+                return_value="/fake/model",
+            ) as mock_ensure,
+        ):
+            stenographer.transcribe_audio(tmp.name, model_name="custom/model")
 
         mock_ensure.assert_called_once_with("custom/model")
 
     def test_transcribe_audio_passes_language_to_mlx_not_beam_size(self) -> None:
         fake_mlx = types.SimpleNamespace(
-            transcribe=MagicMock(return_value={"text": "", "segments": [], "language": "en"})
+            transcribe=MagicMock(
+                return_value={"text": "", "segments": [], "language": "en"}
+            )
         )
-        with tempfile.NamedTemporaryFile(suffix=".wav") as tmp:
-            with patch.dict(sys.modules, {"mlx_whisper": fake_mlx}):
-                with patch(
-                    "stenographer.stenographer._ensure_mlx_model", return_value="/fake/model"
-                ):
-                    stenographer.transcribe_audio(tmp.name, language="en", beam_size=3)
+        with (
+            tempfile.NamedTemporaryFile(suffix=".wav") as tmp,
+            patch.dict(sys.modules, {"mlx_whisper": fake_mlx}),
+            patch(
+                "stenographer.stenographer._ensure_mlx_model",
+                return_value="/fake/model",
+            ),
+        ):
+            stenographer.transcribe_audio(tmp.name, language="en", beam_size=3)
 
         call_kwargs = fake_mlx.transcribe.call_args
         # language must be forwarded
         self.assertEqual(call_kwargs.kwargs.get("language"), "en")
-        # beam_size must NOT be forwarded (mlx-whisper raises NotImplementedError for it)
+        # beam_size must NOT be forwarded
+        # (mlx-whisper raises NotImplementedError for it)
         self.assertNotIn("beam_size", call_kwargs.kwargs)
 
     def test_transcribe_audio_accepts_mp4(self) -> None:
@@ -190,12 +234,15 @@ class StenographerTests(unittest.TestCase):
                 }
             )
         )
-        with tempfile.NamedTemporaryFile(suffix=".mp4") as tmp:
-            with patch.dict(sys.modules, {"mlx_whisper": fake_mlx}):
-                with patch(
-                    "stenographer.stenographer._ensure_mlx_model", return_value="/fake/model"
-                ):
-                    result = stenographer.transcribe_audio(tmp.name)
+        with (
+            tempfile.NamedTemporaryFile(suffix=".mp4") as tmp,
+            patch.dict(sys.modules, {"mlx_whisper": fake_mlx}),
+            patch(
+                "stenographer.stenographer._ensure_mlx_model",
+                return_value="/fake/model",
+            ),
+        ):
+            result = stenographer.transcribe_audio(tmp.name)
 
         self.assertEqual(result["text"], "Hello Teams")
         self.assertEqual(result["language"], "en")
@@ -235,9 +282,13 @@ class StenographerTests(unittest.TestCase):
 
         with tempfile.TemporaryDirectory() as tmpdir:
             cache_base = Path(tmpdir)
-            with patch("stenographer.stenographer._CACHE_DIR", cache_base):
-                with patch("stenographer.stenographer._convert_hf_to_mlx") as mock_convert:
-                    stenographer._ensure_mlx_model(model_name)
+            with (
+                patch("stenographer.stenographer._CACHE_DIR", cache_base),
+                patch(
+                    "stenographer.stenographer._convert_hf_to_mlx"
+                ) as mock_convert,
+            ):
+                stenographer._ensure_mlx_model(model_name)
 
         mock_convert.assert_called_once()
 
@@ -256,8 +307,12 @@ class StenographerTests(unittest.TestCase):
 
         fake_mx = types.SimpleNamespace(
             float16="float16",
-            load=MagicMock(return_value={k: FakeArray(v) for k, v in raw_weights.items()}),
-            save_safetensors=MagicMock(side_effect=lambda path, w, **kw: saved.update(w)),
+            load=MagicMock(
+                return_value={k: FakeArray(v) for k, v in raw_weights.items()}
+            ),
+            save_safetensors=MagicMock(
+                side_effect=lambda path, w, **kw: saved.update(w)
+            ),
             swapaxes=MagicMock(side_effect=lambda v, a, b: v),
         )
         return fake_mx, saved
@@ -279,7 +334,9 @@ class StenographerTests(unittest.TestCase):
         import json
 
         with tempfile.TemporaryDirectory() as model_dir:
-            Path(model_dir, "config.json").write_text(json.dumps(hf_config), encoding="utf-8")
+            Path(model_dir, "config.json").write_text(
+                json.dumps(hf_config), encoding="utf-8"
+            )
             with tempfile.TemporaryDirectory() as out_dir:
                 output_path = Path(out_dir) / "converted"
                 with patch.dict(
@@ -297,7 +354,8 @@ class StenographerTests(unittest.TestCase):
     def test_convert_hf_to_mlx_skips_encoder_embed_positions(self) -> None:
         # AudioEncoder stores positional embedding as _positional_embedding (private,
         # not a loadable parameter). Sending encoder.positional_embedding to
-        # model.update() raises "Module does not have parameter named 'positional_embedding'".
+        # model.update() raises "Module does not have parameter
+        # named 'positional_embedding'".
         fake_mx, saved = self._make_fake_mx(
             {
                 "model.encoder.embed_positions.weight": 1,  # must be skipped
@@ -308,8 +366,12 @@ class StenographerTests(unittest.TestCase):
         self._run_convert(fake_mx, self._hf_config())
 
         self.assertFalse(
-            any("encoder.positional_embedding" in k or k == "positional_embedding" for k in saved),
-            f"encoder positional_embedding should be skipped but found: {list(saved.keys())}",
+            any(
+                "encoder.positional_embedding" in k or k == "positional_embedding"
+                for k in saved
+            ),
+            f"encoder positional_embedding should be skipped"
+            f" but found: {list(saved.keys())}",
         )
         self.assertIn("decoder.positional_embedding", saved)
 
@@ -328,7 +390,8 @@ class StenographerTests(unittest.TestCase):
 
         self.assertFalse(
             any("proj_out" in k for k in saved),
-            f"proj_out should be skipped but found: {[k for k in saved if 'proj_out' in k]}",
+            f"proj_out should be skipped"
+            f" but found: {[k for k in saved if 'proj_out' in k]}",
         )
         self.assertIn("encoder.conv1.weight", saved)
 
@@ -344,7 +407,7 @@ class StenographerTests(unittest.TestCase):
         self.assertNotIn("model.decoder.embed_tokens.weight", saved)
 
     def test_convert_hf_to_mlx_swaps_conv_weight_axes(self) -> None:
-        fake_mx, saved = self._make_fake_mx(
+        fake_mx, _ = self._make_fake_mx(
             {
                 "model.encoder.conv1.weight": 3,  # ndim=3 → swapaxes must be called
             }
@@ -354,12 +417,15 @@ class StenographerTests(unittest.TestCase):
         fake_mx.swapaxes.assert_called_once()
 
     def test_main_prints_transcript_without_output_flag(self) -> None:
-        with tempfile.NamedTemporaryFile(suffix=".wav") as wav:
-            with patch(
-                "stenographer.stenographer.transcribe_audio", return_value={"text": "hello"}
-            ):
-                with patch("sys.stdout", new=io.StringIO()) as stdout:
-                    exit_code = stenographer.main([wav.name])
+        with (
+            tempfile.NamedTemporaryFile(suffix=".wav") as wav,
+            patch(
+                "stenographer.stenographer.transcribe_audio",
+                return_value={"text": "hello"},
+            ),
+            patch("sys.stdout", new=io.StringIO()) as stdout,
+        ):
+            exit_code = stenographer.main([wav.name])
 
         self.assertEqual(exit_code, 0)
         self.assertEqual(stdout.getvalue(), "hello\n")
@@ -417,12 +483,15 @@ class StenographerTests(unittest.TestCase):
                 }
             )
         )
-        with tempfile.NamedTemporaryFile(suffix=".wav") as tmp:
-            with patch.dict(sys.modules, {"mlx_whisper": fake_mlx}):
-                with patch(
-                    "stenographer.stenographer._ensure_mlx_model", return_value="/fake/model"
-                ):
-                    result = stenographer.transcribe_audio(tmp.name)
+        with (
+            tempfile.NamedTemporaryFile(suffix=".wav") as tmp,
+            patch.dict(sys.modules, {"mlx_whisper": fake_mlx}),
+            patch(
+                "stenographer.stenographer._ensure_mlx_model",
+                return_value="/fake/model",
+            ),
+        ):
+            result = stenographer.transcribe_audio(tmp.name)
 
         self.assertIn("segments", result)
         self.assertEqual(len(result["segments"]), 1)
@@ -433,26 +502,30 @@ class StenographerTests(unittest.TestCase):
 
     def test_main_prints_formatted_segments_by_default(self) -> None:
         segments = [{"start": 0.0, "end": 4.0, "text": " Hej världen"}]
-        with tempfile.NamedTemporaryFile(suffix=".wav") as wav:
-            with patch(
+        with (
+            tempfile.NamedTemporaryFile(suffix=".wav") as wav,
+            patch(
                 "stenographer.stenographer.transcribe_audio",
                 return_value={"text": "Hej världen", "segments": segments},
-            ):
-                with patch("sys.stdout", new=io.StringIO()) as stdout:
-                    exit_code = stenographer.main([wav.name])
+            ),
+            patch("sys.stdout", new=io.StringIO()) as stdout,
+        ):
+            exit_code = stenographer.main([wav.name])
 
         self.assertEqual(exit_code, 0)
         self.assertEqual(stdout.getvalue(), "[00:00:00 --> 00:00:04] Hej världen\n")
 
     def test_main_prints_flat_text_with_format_text_flag(self) -> None:
         segments = [{"start": 0.0, "end": 4.0, "text": " Hej världen"}]
-        with tempfile.NamedTemporaryFile(suffix=".wav") as wav:
-            with patch(
+        with (
+            tempfile.NamedTemporaryFile(suffix=".wav") as wav,
+            patch(
                 "stenographer.stenographer.transcribe_audio",
                 return_value={"text": "Hej världen", "segments": segments},
-            ):
-                with patch("sys.stdout", new=io.StringIO()) as stdout:
-                    exit_code = stenographer.main([wav.name, "--format", "text"])
+            ),
+            patch("sys.stdout", new=io.StringIO()) as stdout,
+        ):
+            exit_code = stenographer.main([wav.name, "--format", "text"])
 
         self.assertEqual(exit_code, 0)
         self.assertEqual(stdout.getvalue(), "Hej världen\n")
@@ -482,13 +555,15 @@ class StenographerTests(unittest.TestCase):
         self.assertIn("Error:", stderr.getvalue())
 
     def test_main_handles_unexpected_exception(self) -> None:
-        with tempfile.NamedTemporaryFile(suffix=".wav") as wav:
-            with patch(
+        with (
+            tempfile.NamedTemporaryFile(suffix=".wav") as wav,
+            patch(
                 "stenographer.stenographer.transcribe_audio",
                 side_effect=MemoryError("out of memory"),
-            ):
-                with patch("sys.stderr", new=io.StringIO()) as stderr:
-                    exit_code = stenographer.main([wav.name])
+            ),
+            patch("sys.stderr", new=io.StringIO()) as stderr,
+        ):
+            exit_code = stenographer.main([wav.name])
 
         self.assertEqual(exit_code, 1)
         self.assertIn("Unexpected error (MemoryError):", stderr.getvalue())
@@ -496,11 +571,14 @@ class StenographerTests(unittest.TestCase):
     def test_main_passes_model_arg_to_transcribe(self) -> None:
         with tempfile.NamedTemporaryFile(suffix=".wav") as wav:
             audio_path = wav.name
-            with patch(
-                "stenographer.stenographer.transcribe_audio", return_value={"text": ""}
-            ) as mock_transcribe:
-                with patch("sys.stdout", new=io.StringIO()):
-                    stenographer.main([audio_path, "--model", "custom/model"])
+            with (
+                patch(
+                    "stenographer.stenographer.transcribe_audio",
+                    return_value={"text": ""},
+                ) as mock_transcribe,
+                patch("sys.stdout", new=io.StringIO()),
+            ):
+                stenographer.main([audio_path, "--model", "custom/model"])
 
         mock_transcribe.assert_called_once_with(
             audio_path,
@@ -513,11 +591,14 @@ class StenographerTests(unittest.TestCase):
     def test_main_passes_language_arg_to_transcribe(self) -> None:
         with tempfile.NamedTemporaryFile(suffix=".wav") as wav:
             audio_path = wav.name
-            with patch(
-                "stenographer.stenographer.transcribe_audio", return_value={"text": ""}
-            ) as mock_transcribe:
-                with patch("sys.stdout", new=io.StringIO()):
-                    stenographer.main([audio_path, "--language", "sv"])
+            with (
+                patch(
+                    "stenographer.stenographer.transcribe_audio",
+                    return_value={"text": ""},
+                ) as mock_transcribe,
+                patch("sys.stdout", new=io.StringIO()),
+            ):
+                stenographer.main([audio_path, "--language", "sv"])
 
         mock_transcribe.assert_called_once_with(
             audio_path,
@@ -530,11 +611,14 @@ class StenographerTests(unittest.TestCase):
     def test_main_passes_beam_size_arg_to_transcribe(self) -> None:
         with tempfile.NamedTemporaryFile(suffix=".wav") as wav:
             audio_path = wav.name
-            with patch(
-                "stenographer.stenographer.transcribe_audio", return_value={"text": ""}
-            ) as mock_transcribe:
-                with patch("sys.stdout", new=io.StringIO()):
-                    stenographer.main([audio_path, "--beam-size", "3"])
+            with (
+                patch(
+                    "stenographer.stenographer.transcribe_audio",
+                    return_value={"text": ""},
+                ) as mock_transcribe,
+                patch("sys.stdout", new=io.StringIO()),
+            ):
+                stenographer.main([audio_path, "--beam-size", "3"])
 
         mock_transcribe.assert_called_once_with(
             audio_path,
@@ -547,11 +631,14 @@ class StenographerTests(unittest.TestCase):
     def test_main_passes_compute_type_arg_to_transcribe(self) -> None:
         with tempfile.NamedTemporaryFile(suffix=".wav") as wav:
             audio_path = wav.name
-            with patch(
-                "stenographer.stenographer.transcribe_audio", return_value={"text": ""}
-            ) as mock_transcribe:
-                with patch("sys.stdout", new=io.StringIO()):
-                    stenographer.main([audio_path, "--compute-type", "int8"])
+            with (
+                patch(
+                    "stenographer.stenographer.transcribe_audio",
+                    return_value={"text": ""},
+                ) as mock_transcribe,
+                patch("sys.stdout", new=io.StringIO()),
+            ):
+                stenographer.main([audio_path, "--compute-type", "int8"])
 
         mock_transcribe.assert_called_once_with(
             audio_path,

@@ -26,7 +26,36 @@ packages = ["src/stenographer"]
 pythonpath = ["src"]
 
 [tool.ruff]
-line-length = 100
+target-version = "py311"
+line-length = 88
 
 [tool.ruff.lint]
-select = ["E", "F", "I"]
+# Select a balanced, highly effective subset of rules
+select = [
+    "F",    # Pyflakes (catches fundamental runtime bugs/unused variables)
+    "E",    # Pycodestyle errors (PEP 8 style violations)
+    "W",    # Pycodestyle warnings (PEP 8 stylistic styling)
+    "I",    # Isort (automates clean, sorted imports)
+    "N",    # PEP8-naming (keeps naming conventions uniform across the team)
+    "UP",   # Pyupgrade (suggests cleaner, modern Python syntax updates)
+    "B",    # Flake8-bugbear (finds subtle logic design flaws and anti-patterns)
+    "C4",   # Flake8-comprehensions (optimizes list/dict comprehension syntax)
+    "SIM",  # Flake8-simplify (helps refactor over-engineered conditional logic)
+    "PTH",  # Flake8-use-pathlib (encourages modern object-oriented path handling)
+    "RUF",  # Ruff-specific rules (catches common AI/engine level pitfalls)
+]
+
+ignore = [
+    # Rely on the automated ruff formatter to handle layout spacing and line splits.
+    # Disabling these prevents linting conflicts with the formatter tool.
+    "COM812", # Trailing comma missing
+    "ISC001", # Implicit string concatenation
+]
+
+[tool.ruff.lint.per-file-ignores]
+# Allow standard assert statements in test files without throwing a warning
+"tests/**/*.py" = ["S101"]
+
+[tool.ruff.format]
+quote-style = "double"
+indent-style = "space"

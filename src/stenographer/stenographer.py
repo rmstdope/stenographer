@@ -38,7 +38,8 @@ def _validate_audio_path(audio_path: str | Path) -> Path:
         raise ValueError(f"Audio path is not a file: {path}")
     if path.suffix.lower() not in SUPPORTED_EXTENSIONS:
         raise ValueError(
-            f"Unsupported audio/video format '{path.suffix}'. Supported formats: WAV, MP3, MP4"
+            f"Unsupported audio/video format '{path.suffix}'."
+            " Supported formats: WAV, MP3, MP4"
         )
     return path
 
@@ -74,7 +75,7 @@ def _convert_hf_to_mlx(model_name: str, output_path: Path) -> None:
 
     model_dir = Path(snapshot_download(model_name))
 
-    with open(model_dir / "config.json", encoding="utf-8") as f:
+    with (model_dir / "config.json").open(encoding="utf-8") as f:
         hf_config = json.load(f)
 
     mlx_config = {
@@ -107,7 +108,7 @@ def _convert_hf_to_mlx(model_name: str, output_path: Path) -> None:
 
     output_path.mkdir(parents=True, exist_ok=True)
     mx.save_safetensors(str(output_path / "weights.safetensors"), new_weights)
-    with open(output_path / "config.json", "w", encoding="utf-8") as f:
+    with (output_path / "config.json").open("w", encoding="utf-8") as f:
         json.dump(mlx_config, f, indent=2)
 
 
@@ -120,7 +121,9 @@ def _ensure_mlx_model(model_name: str) -> str:
 
     model_hash = hashlib.md5(model_name.encode()).hexdigest()
     model_cache = _CACHE_DIR / model_hash
-    if (model_cache / "weights.safetensors").exists() and (model_cache / "config.json").exists():
+    if (model_cache / "weights.safetensors").exists() and (
+        model_cache / "config.json"
+    ).exists():
         return str(model_cache)
 
     _convert_hf_to_mlx(model_name, model_cache)
@@ -158,9 +161,14 @@ def transcribe_audio(
 
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(
-        description="Transcribe WAV/MP3/MP4 recordings to text using mlx-whisper and KBLab models."
+        description=(
+            "Transcribe WAV/MP3/MP4 recordings to text"
+            " using mlx-whisper and KBLab models."
+        )
     )
-    parser.add_argument("audio", help="Path to input audio/video file (.wav, .mp3 or .mp4)")
+    parser.add_argument(
+        "audio", help="Path to input audio/video file (.wav, .mp3 or .mp4)"
+    )
     parser.add_argument("-o", "--output", help="Optional path to write transcript text")
     parser.add_argument("--model", default=DEFAULT_MODEL, help="Whisper model name")
     parser.add_argument("--language", help="Language code (e.g. sv, en)")
@@ -168,8 +176,11 @@ def main(argv: list[str] | None = None) -> int:
         "--beam-size",
         type=int,
         default=5,
-        help="Number of candidate sequences considered at each decoding step (default: 5). "
-        "Higher values improve accuracy at the cost of speed; 1 is greedy (fastest).",
+        help=(
+            "Number of candidate sequences considered at each decoding step"
+            " (default: 5). Higher values improve accuracy at the cost of speed;"
+            " 1 is greedy (fastest)."
+        ),
     )
     parser.add_argument(
         "--format",
