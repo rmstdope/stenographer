@@ -65,7 +65,7 @@ def transcribe_audio(
         cleaned_text = getattr(segment, "text", "").strip()
         if cleaned_text:
             segment_texts.append(cleaned_text)
-    text = " ".join(segment_texts).strip()
+    text = " ".join(segment_texts)
     return {
         "text": text,
         "language": getattr(info, "language", language),
