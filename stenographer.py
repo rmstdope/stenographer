@@ -123,7 +123,6 @@ def transcribe_audio(
         str(path),
         path_or_hf_repo=mlx_model_path,
         language=language,
-        beam_size=beam_size,
     )
 
     segments = result.get("segments", [])

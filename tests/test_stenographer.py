@@ -145,7 +145,7 @@ class StenographerTests(unittest.TestCase):
 
         mock_ensure.assert_called_once_with("custom/model")
 
-    def test_transcribe_audio_passes_language_and_beam_size_to_mlx(self) -> None:
+    def test_transcribe_audio_passes_language_to_mlx_not_beam_size(self) -> None:
         fake_mlx = types.SimpleNamespace(
             transcribe=MagicMock(return_value={"text": "", "segments": [], "language": "en"})
         )
@@ -155,7 +155,10 @@ class StenographerTests(unittest.TestCase):
                     stenographer.transcribe_audio(tmp.name, language="en", beam_size=3)
 
         call_kwargs = fake_mlx.transcribe.call_args
-        self.assertEqual(call_kwargs.kwargs.get("language") or call_kwargs.args[1] if len(call_kwargs.args) > 1 else call_kwargs.kwargs.get("language"), "en")
+        # language must be forwarded
+        self.assertEqual(call_kwargs.kwargs.get("language"), "en")
+        # beam_size must NOT be forwarded (mlx-whisper raises NotImplementedError for it)
+        self.assertNotIn("beam_size", call_kwargs.kwargs)
 
     def test_transcribe_audio_accepts_mp4(self) -> None:
         fake_mlx = types.SimpleNamespace(
