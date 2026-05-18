@@ -21,6 +21,8 @@ class StenographerTests(unittest.TestCase):
                 [
                     types.SimpleNamespace(text="Hej"),
                     types.SimpleNamespace(text=" världen "),
+                    types.SimpleNamespace(text="   "),
+                    types.SimpleNamespace(text=""),
                 ],
                 types.SimpleNamespace(language="sv", duration=12.5),
             )

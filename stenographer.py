@@ -60,11 +60,11 @@ def transcribe_audio(
 
     segments, info = model.transcribe(audio, language=language, beam_size=beam_size)
 
-    segment_texts = [
-        segment.text.strip()
-        for segment in segments
-        if getattr(segment, "text", "").strip()
-    ]
+    segment_texts = []
+    for segment in segments:
+        cleaned_text = getattr(segment, "text", "").strip()
+        if cleaned_text:
+            segment_texts.append(cleaned_text)
     text = " ".join(segment_texts).strip()
     return {
         "text": text,
