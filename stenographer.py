@@ -23,7 +23,7 @@ def _validate_audio_path(audio_path: str | Path) -> Path:
     return path
 
 
-_SKIP_KEYS = {"proj_out.weight"}
+_SKIP_KEYS = {"proj_out.weight", "encoder.embed_positions.weight"}
 _KEY_REPLACEMENTS = [
     (".layers.", ".blocks."),
     (".self_attn.", ".attn."),

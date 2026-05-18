@@ -256,6 +256,22 @@ class StenographerTests(unittest.TestCase):
                 }):
                     stenographer._convert_hf_to_mlx("some/model", output_path)
 
+    def test_convert_hf_to_mlx_skips_encoder_embed_positions(self) -> None:
+        # AudioEncoder stores positional embedding as _positional_embedding (private,
+        # not a loadable parameter). Sending encoder.positional_embedding to
+        # model.update() raises "Module does not have parameter named 'positional_embedding'".
+        fake_mx, saved = self._make_fake_mx({
+            "model.encoder.embed_positions.weight": 1,  # must be skipped
+            "model.decoder.embed_positions.weight": 1,  # must be remapped to decoder.positional_embedding
+        })
+        self._run_convert(fake_mx, self._hf_config())
+
+        self.assertFalse(
+            any("encoder.positional_embedding" in k or k == "positional_embedding" for k in saved),
+            f"encoder positional_embedding should be skipped but found: {list(saved.keys())}",
+        )
+        self.assertIn("decoder.positional_embedding", saved)
+
     def test_convert_hf_to_mlx_skips_proj_out_weight(self) -> None:
         # Bug: proj_out.weight (with or without "model." prefix) was not skipped.
         # mlx-whisper rejects the converted weights with "Module does not have
