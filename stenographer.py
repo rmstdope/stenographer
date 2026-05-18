@@ -6,7 +6,7 @@ from pathlib import Path
 from typing import Any
 
 DEFAULT_MODEL = "KBLab/kb-whisper-small-ct2"
-SUPPORTED_EXTENSIONS = {".wav", ".mp3"}
+SUPPORTED_EXTENSIONS = {".wav", ".mp3", ".mp4"}
 
 
 def _validate_audio_path(audio_path: str | Path) -> Path:
@@ -17,7 +17,7 @@ def _validate_audio_path(audio_path: str | Path) -> Path:
         raise ValueError(f"Audio path is not a file: {path}")
     if path.suffix.lower() not in SUPPORTED_EXTENSIONS:
         raise ValueError(
-            f"Unsupported audio format '{path.suffix}'. Supported formats: WAV, MP3"
+            f"Unsupported audio/video format '{path.suffix}'. Supported formats: WAV, MP3, MP4"
         )
     return path
 
@@ -79,9 +79,9 @@ def transcribe_audio(
 
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(
-        description="Transcribe WAV/MP3 recordings to text using faster-whisper and KBLab models."
+        description="Transcribe WAV/MP3/MP4 recordings to text using faster-whisper and KBLab models."
     )
-    parser.add_argument("audio", help="Path to input audio file (.wav or .mp3)")
+    parser.add_argument("audio", help="Path to input audio/video file (.wav, .mp3 or .mp4)")
     parser.add_argument("-o", "--output", help="Optional path to write transcript text")
     parser.add_argument("--model", default=DEFAULT_MODEL, help="Whisper model name")
     parser.add_argument("--language", help="Language code (e.g. sv, en)")
