@@ -60,7 +60,11 @@ def transcribe_audio(
 
     segments, info = model.transcribe(audio, language=language, beam_size=beam_size)
 
-    text = " ".join(segment.text.strip() for segment in segments if getattr(segment, "text", "")).strip()
+    text = " ".join(
+        segment.text.strip()
+        for segment in segments
+        if getattr(segment, "text", "").strip()
+    ).strip()
     return {
         "text": text,
         "language": getattr(info, "language", language),
@@ -93,8 +97,11 @@ def main(argv: list[str] | None = None) -> int:
             beam_size=args.beam_size,
             compute_type=args.compute_type,
         )
-    except Exception as exc:  # noqa: BLE001
+    except (FileNotFoundError, ValueError, RuntimeError) as exc:
         print(f"Error: {exc}", file=sys.stderr)
+        return 1
+    except Exception as exc:  # noqa: BLE001
+        print(f"Unexpected error ({type(exc).__name__}): {exc}", file=sys.stderr)
         return 1
 
     if args.output:
