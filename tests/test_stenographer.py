@@ -56,7 +56,7 @@ class StenographerTests(unittest.TestCase):
 
         self.assertEqual(exit_code, 0)
         self.assertEqual(output_text, "hej")
-        self.assertEqual(cli_output, "hej\n")
+        self.assertEqual(cli_output, "")  # no stdout when -o is given
 
     def test_main_returns_error_when_output_write_fails(self) -> None:
         with (

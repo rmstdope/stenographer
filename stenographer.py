@@ -180,7 +180,8 @@ def main(argv: list[str] | None = None) -> int:
         print(f"Unexpected error ({type(exc).__name__}): {exc}", file=sys.stderr)
         return 1
 
-    print(result["text"])
+    if not args.output:
+        print(result["text"])
     return 0
 
 
