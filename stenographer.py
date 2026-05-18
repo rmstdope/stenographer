@@ -5,6 +5,7 @@ import sys
 from pathlib import Path
 from typing import Any
 
+DEFAULT_MODEL = "KBLab/kb-whisper-small-ct2"
 SUPPORTED_EXTENSIONS = {".wav", ".mp3"}
 
 
@@ -12,6 +13,8 @@ def _validate_audio_path(audio_path: str | Path) -> Path:
     path = Path(audio_path)
     if not path.exists():
         raise FileNotFoundError(f"Audio file not found: {path}")
+    if not path.is_file():
+        raise ValueError(f"Audio path is not a file: {path}")
     if path.suffix.lower() not in SUPPORTED_EXTENSIONS:
         raise ValueError(
             f"Unsupported audio format '{path.suffix}'. Supported formats: WAV, MP3"
@@ -46,7 +49,7 @@ def load_audio(audio_path: str | Path, sample_rate: int = 16000) -> Any:
 
 def transcribe_audio(
     audio_path: str | Path,
-    model_name: str = "KBLab/kb-whisper-small",
+    model_name: str = DEFAULT_MODEL,
     language: str | None = None,
     beam_size: int = 5,
     compute_type: str = "auto",
@@ -80,7 +83,7 @@ def main(argv: list[str] | None = None) -> int:
     )
     parser.add_argument("audio", help="Path to input audio file (.wav or .mp3)")
     parser.add_argument("-o", "--output", help="Optional path to write transcript text")
-    parser.add_argument("--model", default="KBLab/kb-whisper-small", help="Whisper model name")
+    parser.add_argument("--model", default=DEFAULT_MODEL, help="Whisper model name")
     parser.add_argument("--language", help="Language code (e.g. sv, en)")
     parser.add_argument("--beam-size", type=int, default=5, help="Beam size for decoding")
     parser.add_argument(
@@ -99,16 +102,15 @@ def main(argv: list[str] | None = None) -> int:
             beam_size=args.beam_size,
             compute_type=args.compute_type,
         )
-    except (FileNotFoundError, ValueError, RuntimeError) as exc:
+        if args.output:
+            Path(args.output).write_text(result["text"], encoding="utf-8")
+    except (FileNotFoundError, ValueError, RuntimeError, OSError) as exc:
         print(f"Error: {exc}", file=sys.stderr)
         return 1
     except Exception as exc:
         # Keep CLI output user-friendly instead of displaying a raw traceback.
         print(f"Unexpected error ({type(exc).__name__}): {exc}", file=sys.stderr)
         return 1
-
-    if args.output:
-        Path(args.output).write_text(result["text"], encoding="utf-8")
 
     print(result["text"])
     return 0

@@ -11,6 +11,7 @@ A Python application that transcribes WAV or MP3 recordings to text.
 ## Setup
 
 ```bash
+python --version  # Requires Python 3.10+
 python -m venv .venv
 source .venv/bin/activate
 pip install -r requirements.txt
@@ -27,7 +28,7 @@ python stenographer.py path/to/audio.mp3 --language sv --output transcript.txt
 
 Options:
 
-- `--model` (default: `KBLab/kb-whisper-small`)
+- `--model` (default: `KBLab/kb-whisper-small-ct2`)
 - `--compute-type` (default: `auto`)
 - `--beam-size` (default: `5`)
 - `--language` (optional)
