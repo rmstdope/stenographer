@@ -20,9 +20,14 @@ jobs:
           python-version: "3.x"
 
       - name: Install dependencies
-        run: pip install -r requirements.txt
+        run: pip install -e ".[dev]"
         # Note: mlx-whisper has a sys_platform == "darwin" marker so it is
         # skipped on Linux. Tests use mocks and do not require the real library.
 
+      - name: Lint and format check
+        run: |
+          ruff check src/ tests/
+          ruff format --check src/ tests/
+
       - name: Run tests
-        run: python -m unittest discover -s tests -p "test_*.py"
+        run: pytest tests/

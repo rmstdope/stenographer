@@ -148,17 +148,17 @@ def main(argv: list[str] | None = None) -> int:
         type=int,
         default=5,
         help="Number of candidate sequences considered at each decoding step (default: 5). "
-             "Higher values improve accuracy at the cost of speed; 1 is greedy (fastest).",
+        "Higher values improve accuracy at the cost of speed; 1 is greedy (fastest).",
     )
     parser.add_argument(
         "--compute-type",
         default="auto",
         choices=["auto", "int8", "float16", "float32"],
         help="Numerical precision for inference (default: auto). "
-             "auto: hardware-optimised automatically. "
-             "int8: fastest/smallest memory, best for CPU, slight accuracy trade-off. "
-             "float16: fast on GPU/Apple Silicon with good accuracy. "
-             "float32: full precision, slowest, most accurate.",
+        "auto: hardware-optimised automatically. "
+        "int8: fastest/smallest memory, best for CPU, slight accuracy trade-off. "
+        "float16: fast on GPU/Apple Silicon with good accuracy. "
+        "float32: full precision, slowest, most accurate.",
     )
     args = parser.parse_args(argv)
 

@@ -4,7 +4,7 @@ import tempfile
 import types
 import unittest
 from pathlib import Path
-from unittest.mock import MagicMock, patch, call
+from unittest.mock import MagicMock, patch
 
 import stenographer
 
@@ -27,11 +27,13 @@ class StenographerTests(unittest.TestCase):
 
     def test_transcribe_audio_happy_path(self) -> None:
         fake_mlx = types.SimpleNamespace(
-            transcribe=MagicMock(return_value={
-                "text": " Hej världen ",
-                "segments": [{"start": 0.0, "end": 12.5, "text": " Hej världen "}],
-                "language": "sv",
-            })
+            transcribe=MagicMock(
+                return_value={
+                    "text": " Hej världen ",
+                    "segments": [{"start": 0.0, "end": 12.5, "text": " Hej världen "}],
+                    "language": "sv",
+                }
+            )
         )
         with tempfile.NamedTemporaryFile(suffix=".wav") as tmp:
             with patch.dict(sys.modules, {"mlx_whisper": fake_mlx}):
@@ -90,11 +92,13 @@ class StenographerTests(unittest.TestCase):
 
     def test_transcribe_audio_returns_duration_from_last_segment(self) -> None:
         fake_mlx = types.SimpleNamespace(
-            transcribe=MagicMock(return_value={
-                "text": "hello",
-                "segments": [{"start": 0.0, "end": 42.0, "text": "hello"}],
-                "language": "sv",
-            })
+            transcribe=MagicMock(
+                return_value={
+                    "text": "hello",
+                    "segments": [{"start": 0.0, "end": 42.0, "text": "hello"}],
+                    "language": "sv",
+                }
+            )
         )
         with tempfile.NamedTemporaryFile(suffix=".wav") as tmp:
             with patch.dict(sys.modules, {"mlx_whisper": fake_mlx}):
@@ -105,11 +109,13 @@ class StenographerTests(unittest.TestCase):
 
     def test_transcribe_audio_duration_zero_with_no_segments(self) -> None:
         fake_mlx = types.SimpleNamespace(
-            transcribe=MagicMock(return_value={
-                "text": "",
-                "segments": [],
-                "language": "sv",
-            })
+            transcribe=MagicMock(
+                return_value={
+                    "text": "",
+                    "segments": [],
+                    "language": "sv",
+                }
+            )
         )
         with tempfile.NamedTemporaryFile(suffix=".wav") as tmp:
             with patch.dict(sys.modules, {"mlx_whisper": fake_mlx}):
@@ -121,11 +127,13 @@ class StenographerTests(unittest.TestCase):
 
     def test_transcribe_audio_language_fallback_to_parameter(self) -> None:
         fake_mlx = types.SimpleNamespace(
-            transcribe=MagicMock(return_value={
-                "text": "",
-                "segments": [],
-                "language": None,
-            })
+            transcribe=MagicMock(
+                return_value={
+                    "text": "",
+                    "segments": [],
+                    "language": None,
+                }
+            )
         )
         with tempfile.NamedTemporaryFile(suffix=".wav") as tmp:
             with patch.dict(sys.modules, {"mlx_whisper": fake_mlx}):
@@ -140,7 +148,9 @@ class StenographerTests(unittest.TestCase):
         )
         with tempfile.NamedTemporaryFile(suffix=".wav") as tmp:
             with patch.dict(sys.modules, {"mlx_whisper": fake_mlx}):
-                with patch("stenographer._ensure_mlx_model", return_value="/fake/model") as mock_ensure:
+                with patch(
+                    "stenographer._ensure_mlx_model", return_value="/fake/model"
+                ) as mock_ensure:
                     stenographer.transcribe_audio(tmp.name, model_name="custom/model")
 
         mock_ensure.assert_called_once_with("custom/model")
@@ -162,11 +172,13 @@ class StenographerTests(unittest.TestCase):
 
     def test_transcribe_audio_accepts_mp4(self) -> None:
         fake_mlx = types.SimpleNamespace(
-            transcribe=MagicMock(return_value={
-                "text": "Hello Teams",
-                "segments": [{"start": 0.0, "end": 5.0, "text": "Hello Teams"}],
-                "language": "en",
-            })
+            transcribe=MagicMock(
+                return_value={
+                    "text": "Hello Teams",
+                    "segments": [{"start": 0.0, "end": 5.0, "text": "Hello Teams"}],
+                    "language": "en",
+                }
+            )
         )
         with tempfile.NamedTemporaryFile(suffix=".mp4") as tmp:
             with patch.dict(sys.modules, {"mlx_whisper": fake_mlx}):
@@ -190,6 +202,7 @@ class StenographerTests(unittest.TestCase):
 
     def test_ensure_mlx_model_returns_cache_path_when_cache_exists(self) -> None:
         import hashlib
+
         model_name = "KBLab/kb-whisper-small"
         model_hash = hashlib.md5(model_name.encode()).hexdigest()
 
@@ -239,34 +252,47 @@ class StenographerTests(unittest.TestCase):
 
     def _hf_config(self) -> dict:
         return {
-            "num_mel_bins": 80, "max_source_positions": 1500, "d_model": 512,
-            "encoder_attention_heads": 8, "encoder_layers": 6, "vocab_size": 51865,
-            "max_target_positions": 448, "decoder_attention_heads": 8, "decoder_layers": 6,
+            "num_mel_bins": 80,
+            "max_source_positions": 1500,
+            "d_model": 512,
+            "encoder_attention_heads": 8,
+            "encoder_layers": 6,
+            "vocab_size": 51865,
+            "max_target_positions": 448,
+            "decoder_attention_heads": 8,
+            "decoder_layers": 6,
         }
 
     def _run_convert(self, fake_mx: types.SimpleNamespace, hf_config: dict) -> None:
         import json
+
         with tempfile.TemporaryDirectory() as model_dir:
             Path(model_dir, "config.json").write_text(json.dumps(hf_config), encoding="utf-8")
             with tempfile.TemporaryDirectory() as out_dir:
                 output_path = Path(out_dir) / "converted"
-                with patch.dict(sys.modules, {
-                    "mlx": types.SimpleNamespace(core=fake_mx),
-                    "mlx.core": fake_mx,
-                    "huggingface_hub": types.SimpleNamespace(
-                        snapshot_download=MagicMock(return_value=model_dir)
-                    ),
-                }):
+                with patch.dict(
+                    sys.modules,
+                    {
+                        "mlx": types.SimpleNamespace(core=fake_mx),
+                        "mlx.core": fake_mx,
+                        "huggingface_hub": types.SimpleNamespace(
+                            snapshot_download=MagicMock(return_value=model_dir)
+                        ),
+                    },
+                ):
                     stenographer._convert_hf_to_mlx("some/model", output_path)
 
     def test_convert_hf_to_mlx_skips_encoder_embed_positions(self) -> None:
         # AudioEncoder stores positional embedding as _positional_embedding (private,
         # not a loadable parameter). Sending encoder.positional_embedding to
         # model.update() raises "Module does not have parameter named 'positional_embedding'".
-        fake_mx, saved = self._make_fake_mx({
-            "model.encoder.embed_positions.weight": 1,  # must be skipped
-            "model.decoder.embed_positions.weight": 1,  # must be remapped to decoder.positional_embedding
-        })
+        fake_mx, saved = self._make_fake_mx(
+            {
+                "model.encoder.embed_positions.weight": 1,  # must be skipped
+                # must be remapped to decoder.positional_embedding
+                "model.decoder.embed_positions.weight": 1,
+            }
+        )
         self._run_convert(fake_mx, self._hf_config())
 
         self.assertFalse(
@@ -279,11 +305,13 @@ class StenographerTests(unittest.TestCase):
         # Bug: proj_out.weight (with or without "model." prefix) was not skipped.
         # mlx-whisper rejects the converted weights with "Module does not have
         # parameter named 'proj_out'".
-        fake_mx, saved = self._make_fake_mx({
-            "model.proj_out.weight": 1,         # must be skipped (with prefix)
-            "proj_out.weight": 1,               # must be skipped (no prefix)
-            "model.encoder.conv1.weight": 3,    # must be kept
-        })
+        fake_mx, saved = self._make_fake_mx(
+            {
+                "model.proj_out.weight": 1,  # must be skipped (with prefix)
+                "proj_out.weight": 1,  # must be skipped (no prefix)
+                "model.encoder.conv1.weight": 3,  # must be kept
+            }
+        )
         self._run_convert(fake_mx, self._hf_config())
 
         self.assertFalse(
@@ -293,23 +321,25 @@ class StenographerTests(unittest.TestCase):
         self.assertIn("encoder.conv1.weight", saved)
 
     def test_convert_hf_to_mlx_remaps_embed_tokens_to_token_embedding(self) -> None:
-        fake_mx, saved = self._make_fake_mx({
-            "model.decoder.embed_tokens.weight": 1,
-        })
+        fake_mx, saved = self._make_fake_mx(
+            {
+                "model.decoder.embed_tokens.weight": 1,
+            }
+        )
         self._run_convert(fake_mx, self._hf_config())
 
         self.assertIn("decoder.token_embedding.weight", saved)
         self.assertNotIn("model.decoder.embed_tokens.weight", saved)
 
     def test_convert_hf_to_mlx_swaps_conv_weight_axes(self) -> None:
-        fake_mx, saved = self._make_fake_mx({
-            "model.encoder.conv1.weight": 3,  # ndim=3 → swapaxes must be called
-        })
+        fake_mx, saved = self._make_fake_mx(
+            {
+                "model.encoder.conv1.weight": 3,  # ndim=3 → swapaxes must be called
+            }
+        )
         self._run_convert(fake_mx, self._hf_config())
 
         fake_mx.swapaxes.assert_called_once()
-
-
 
     def test_main_prints_transcript_without_output_flag(self) -> None:
         with tempfile.NamedTemporaryFile(suffix=".wav") as wav:
