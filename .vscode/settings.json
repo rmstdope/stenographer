@@ -1,0 +1,19 @@
+{
+    // Disable spell checker
+    "cSpell.enabled": false,
+
+    // Disable pylint in favour of ruff
+    "pylint.enabled": false,
+    "python.linting.pylintEnabled": false,
+
+    // Enable ruff linter and formatter
+    "ruff.enable": true,
+    "[python]": {
+        "editor.defaultFormatter": "charliermarsh.ruff",
+        "editor.formatOnSave": true,
+        "editor.codeActionsOnSave": {
+            "source.fixAll.ruff": "explicit",
+            "source.organizeImports.ruff": "explicit"
+        }
+    }
+}
