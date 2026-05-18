@@ -221,3 +221,6 @@ __marimo__/
 *.mp4
 *.wav
 *.mp3
+
+# Temporary files
+.tmp
